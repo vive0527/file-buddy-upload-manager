@@ -3,6 +3,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { Upload, FileUp, AlertCircle, Check, X, Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 
 export interface FileUploaderProps {
@@ -30,20 +31,37 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFileInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const validateFile = (file: File): boolean => {
+    const newWarnings: string[] = [];
+    
     if (file.size > maxSizeInMB * 1024 * 1024) {
-      setError(`File size exceeds ${maxSizeInMB}MB`);
+      setError(`文件大小超过 ${maxSizeInMB}MB 限制`);
       return false;
     }
 
     if (allowedFileTypes.length > 0 && !allowedFileTypes.includes(file.type)) {
-      setError(`File type not allowed. Allowed types: ${allowedFileTypes.join(', ')}`);
+      setError(`不支持的文件类型。支持的类型: ${allowedFileTypes.join(', ')}`);
       return false;
     }
 
+    // 添加警告检查
+    if (file.size > (maxSizeInMB * 0.8) * 1024 * 1024) {
+      newWarnings.push(`文件大小接近限制 (${formatFileSize(file.size)} / ${maxSizeInMB}MB)`);
+    }
+
+    if (file.name.length > 50) {
+      newWarnings.push('文件名过长，建议使用较短的文件名');
+    }
+
+    if (!file.name.includes('.')) {
+      newWarnings.push('文件没有扩展名，可能会影响识别');
+    }
+
+    setWarnings(newWarnings);
     setError(null);
     return true;
   };
@@ -55,16 +73,17 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
     try {
       const uploadedFileInfo = await onFileUpload(file);
       setUploadedFiles((prev) => [...prev, uploadedFileInfo]);
+      setWarnings([]); // 清除警告
       toast({
-        title: "File uploaded successfully",
-        description: `${file.name} has been uploaded.`,
+        title: "文件上传成功",
+        description: `${file.name} 已成功上传。`,
       });
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to upload file');
+      setError(error instanceof Error ? error.message : '文件上传失败');
       toast({
         variant: "destructive",
-        title: "Upload Failed",
-        description: error instanceof Error ? error.message : 'Failed to upload file',
+        title: "上传失败",
+        description: error instanceof Error ? error.message : '文件上传失败',
       });
     } finally {
       setIsUploading(false);
@@ -129,10 +148,10 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
         </div>
         <div>
           <h3 className="font-semibold mb-1 text-lg">
-            Drag & drop your file here
+            拖拽文件到这里
           </h3>
           <p className="text-muted-foreground text-sm mb-4">
-            or click to browse your files
+            或点击选择文件
           </p>
           <Button
             variant="outline"
@@ -142,12 +161,12 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
             {isUploading ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Uploading...
+                上传中...
               </>
             ) : (
               <>
                 <Upload className="h-4 w-4 mr-2" />
-                Select File
+                选择文件
               </>
             )}
           </Button>
@@ -160,22 +179,35 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
           />
           
           <div className="mt-4 text-xs text-muted-foreground">
-            <p>Maximum file size: {maxSizeInMB}MB</p>
-            <p>Allowed file types: {allowedFileTypes.join(', ')}</p>
+            <p>最大文件大小: {maxSizeInMB}MB</p>
+            <p>支持的文件类型: {allowedFileTypes.join(', ')}</p>
           </div>
         </div>
       </div>
 
+      {/* 错误警告 */}
       {error && (
-        <div className="flex items-center gap-2 text-destructive p-2 bg-destructive/5 rounded-md text-sm">
+        <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <p>{error}</p>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* 一般警告 */}
+      {warnings.length > 0 && (
+        <div className="space-y-2">
+          {warnings.map((warning, index) => (
+            <Alert key={index} className="border-yellow-500/50 bg-yellow-50 text-yellow-800">
+              <AlertCircle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription>{warning}</AlertDescription>
+            </Alert>
+          ))}
         </div>
       )}
 
       {uploadedFiles.length > 0 && (
         <div className="mt-6">
-          <h3 className="font-medium mb-3">Uploaded Files</h3>
+          <h3 className="font-medium mb-3">已上传文件</h3>
           <div className="space-y-2">
             {uploadedFiles.map((file) => (
               <div 
