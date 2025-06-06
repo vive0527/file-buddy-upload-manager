@@ -13,7 +13,8 @@ const Index = () => {
   const [fileTypes, setFileTypes] = useState<string[]>([
     'image/jpeg', 
     'image/png', 
-    'application/pdf'
+    'application/pdf',
+    'application/octet-stream'
   ]);
   const [customFileType, setCustomFileType] = useState<string>('');
 
@@ -54,7 +55,7 @@ const Index = () => {
                 <CardHeader>
                   <CardTitle>Upload Files</CardTitle>
                   <CardDescription>
-                    Upload your files with the current restrictions
+                    Upload your files with the current restrictions (including .dmp files)
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -137,6 +138,7 @@ const Index = () => {
                         <li>Images: image/jpeg, image/png, image/gif</li>
                         <li>Documents: application/pdf, application/msword</li>
                         <li>Data: application/json, text/csv</li>
+                        <li>Binary: application/octet-stream (for .dmp files)</li>
                       </ul>
                     </div>
                   </div>

@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useCallback } from 'react';
 import { Upload, FileUp, AlertCircle, Check, X, Download, Loader2, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -22,7 +23,7 @@ export interface UploadedFileInfo {
 
 export const FileUploader: React.FC<FileUploaderProps> = ({
   maxSizeInMB = 5,
-  allowedFileTypes = ['image/jpeg', 'image/png', 'application/pdf'],
+  allowedFileTypes = ['image/jpeg', 'image/png', 'application/pdf', 'application/octet-stream'],
   onFileUpload,
   className,
 }) => {
@@ -44,8 +45,10 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
       return false;
     }
 
-    if (allowedFileTypes.length > 0 && !allowedFileTypes.includes(file.type)) {
-      setError(`不支持的文件类型。支持的类型: ${allowedFileTypes.join(', ')}`);
+    // 检查文件类型，对于 .dmp 文件特殊处理
+    const isDmpFile = file.name.toLowerCase().endsWith('.dmp');
+    if (allowedFileTypes.length > 0 && !allowedFileTypes.includes(file.type) && !isDmpFile) {
+      setError(`不支持的文件类型。支持的类型: ${allowedFileTypes.join(', ')}, .dmp files`);
       return false;
     }
 
@@ -80,6 +83,8 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
       } else if (file.type === 'application/pdf') {
         reader.onload = () => resolve(reader.result as string);
         reader.readAsDataURL(file);
+      } else if (file.name.toLowerCase().endsWith('.dmp')) {
+        resolve('DMP 文件 - 二进制数据文件，无法预览内容');
       } else {
         resolve('无法预览此文件类型');
       }
@@ -264,7 +269,7 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
           
           <div className="mt-4 text-xs text-muted-foreground">
             <p>最大文件大小: {maxSizeInMB}MB</p>
-            <p>支持的文件类型: {allowedFileTypes.join(', ')}</p>
+            <p>支持的文件类型: {allowedFileTypes.join(', ')}, .dmp files</p>
           </div>
         </div>
       </div>
