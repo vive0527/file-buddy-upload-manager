@@ -1,6 +1,5 @@
-
 import React, { useState, useRef, useCallback } from 'react';
-import { Upload, FileUp, AlertCircle, Check, X, Download, Loader2 } from 'lucide-react';
+import { Upload, FileUp, AlertCircle, Check, X, Download, Loader2, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -32,6 +31,8 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFileInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [fileContents, setFileContents] = useState<{ [key: string]: string }>({});
+  const [showPreview, setShowPreview] = useState<{ [key: string]: boolean }>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -66,14 +67,40 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
     return true;
   };
 
+  const readFileContent = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      if (file.type.startsWith('image/')) {
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      } else if (file.type === 'text/plain' || file.type === 'application/json' || file.type === 'text/csv') {
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsText(file);
+      } else if (file.type === 'application/pdf') {
+        reader.onload = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      } else {
+        resolve('无法预览此文件类型');
+      }
+      
+      reader.onerror = () => reject(new Error('读取文件失败'));
+    });
+  };
+
   const handleFileUpload = async (file: File) => {
     if (!validateFile(file)) return;
 
     setIsUploading(true);
     try {
+      // 读取文件内容
+      const content = await readFileContent(file);
+      
       const uploadedFileInfo = await onFileUpload(file);
       setUploadedFiles((prev) => [...prev, uploadedFileInfo]);
-      setWarnings([]); // 清除警告
+      setFileContents((prev) => ({ ...prev, [uploadedFileInfo.id]: content }));
+      setShowPreview((prev) => ({ ...prev, [uploadedFileInfo.id]: false }));
+      setWarnings([]);
       toast({
         title: "文件上传成功",
         description: `${file.name} 已成功上传。`,
@@ -119,6 +146,63 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
 
   const removeFile = (fileId: string) => {
     setUploadedFiles((prev) => prev.filter(file => file.id !== fileId));
+    setFileContents((prev) => {
+      const { [fileId]: removed, ...rest } = prev;
+      return rest;
+    });
+    setShowPreview((prev) => {
+      const { [fileId]: removed, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  const togglePreview = (fileId: string) => {
+    setShowPreview((prev) => ({ ...prev, [fileId]: !prev[fileId] }));
+  };
+
+  const renderFileContent = (file: UploadedFileInfo) => {
+    const content = fileContents[file.id];
+    if (!content) return null;
+
+    if (file.type.startsWith('image/')) {
+      return (
+        <div className="mt-3 p-3 bg-gray-50 rounded-md">
+          <img 
+            src={content} 
+            alt={file.name}
+            className="max-w-full max-h-64 object-contain rounded"
+          />
+        </div>
+      );
+    }
+
+    if (file.type === 'application/pdf') {
+      return (
+        <div className="mt-3 p-3 bg-gray-50 rounded-md">
+          <iframe
+            src={content}
+            className="w-full h-64 border rounded"
+            title={file.name}
+          />
+        </div>
+      );
+    }
+
+    if (file.type === 'text/plain' || file.type === 'application/json' || file.type === 'text/csv') {
+      return (
+        <div className="mt-3 p-3 bg-gray-50 rounded-md">
+          <pre className="text-sm whitespace-pre-wrap max-h-64 overflow-y-auto">
+            {content}
+          </pre>
+        </div>
+      );
+    }
+
+    return (
+      <div className="mt-3 p-3 bg-gray-50 rounded-md text-center text-muted-foreground">
+        {content}
+      </div>
+    );
   };
 
   const formatFileSize = (bytes: number) => {
@@ -208,41 +292,57 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
       {uploadedFiles.length > 0 && (
         <div className="mt-6">
           <h3 className="font-medium mb-3">已上传文件</h3>
-          <div className="space-y-2">
+          <div className="space-y-4">
             {uploadedFiles.map((file) => (
               <div 
                 key={file.id}
-                className="flex items-center justify-between bg-background p-3 rounded-md border"
+                className="bg-background p-4 rounded-md border"
               >
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <div className="bg-primary/10 p-1 rounded">
-                    <Check className="h-4 w-4 text-primary" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <div className="bg-primary/10 p-1 rounded">
+                      <Check className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="truncate">
+                      <p className="font-medium truncate">{file.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {file.type} • {formatFileSize(file.size)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="truncate">
-                    <p className="font-medium truncate">{file.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {file.type} • {formatFileSize(file.size)}
-                    </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => togglePreview(file.id)}
+                    >
+                      {showPreview[file.id] ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => downloadFile(file.url, file.name)}
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => removeFile(file.id)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => downloadFile(file.url, file.name)}
-                  >
-                    <Download className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => removeFile(file.id)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
+                
+                {showPreview[file.id] && renderFileContent(file)}
               </div>
             ))}
           </div>
